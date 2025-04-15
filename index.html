@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Variogram Concept Demo (Scaled)</title> <!-- Updated title slightly -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Variogram Concept Demo (Scaled Y-Axis)</h1>
+    <p>
+        Demonstrates how the average squared difference between data points generally increases as the separation distance (lag) increases, up to a specified calculation limit.
+        <br>
+        Semivariance (Y-axis) is scaled to [0, 1]. Plot axes are fixed (X max: 20, Y max: 1).
+        <br>
+        *Note: This uses simplified 1D data and a basic calculation.*
+    </p>
+
+    <div class="controls">
+        <label for="numPoints">Number of Points:</label>
+        <input type="number" id="numPoints" value="100" min="20" max="500" step="10">
+
+        <label for="noiseLevel">Noise Level (0-1):</label>
+        <input type="number" id="noiseLevel" value="0.5" min="0" max="1" step="0.1">
+
+        <label for="lagBins">Number of Lag Bins:</label>
+        <input type="number" id="lagBins" value="15" min="5" max="30" step="1">
+
+        <label for="maxLagDistance">Max Lag Distance (Calc):</label> <!-- Clarified label -->
+        <!-- *** Update the max attribute here *** -->
+        <input type="number" id="maxLagDistance" value="100" min="10" max="100" step="5">
+
+        <button id="generateBtn">Generate Data & Plot Variogram</button>
+    </div>
+
+    <div class="chart-container">
+        <h2>Calculated Semivariogram (Points, Scaled)</h2>
+        <canvas id="variogramChart"></canvas>
+    </div>
+
+    <div id="output"></div>
+
+    <!-- Include Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
