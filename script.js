@@ -1,199 +1,282 @@
-// Get references to DOM elements (same as before)
+// --- DOM Elements ---
 const numPointsInput = document.getElementById('numPoints');
 const noiseLevelInput = document.getElementById('noiseLevel');
 const lagBinsInput = document.getElementById('lagBins');
-const maxLagDistanceInput = document.getElementById('maxLagDistance');
+// const maxLagDistanceInput = document.getElementById('maxLagDistance'); // Removed
 const generateBtn = document.getElementById('generateBtn');
-const variogramCanvas = document.getElementById('variogramChart');
+const dataCanvas = document.getElementById('dataCanvas');
+const semivariogramCanvas = document.getElementById('semivariogramCanvas');
 const outputDiv = document.getElementById('output');
 
-let variogramChartInstance = null;
+// --- Chart Instances ---
+let dataChartInstance = null;
+let semivariogramChartInstance = null;
 
-// Function to generate sample data (same as before)
-function generateData(numPoints, noiseLevel) {
+// --- Constants ---
+const SPATIAL_EXTENT_X = 100;
+const SPATIAL_EXTENT_Y = 100;
+// const VARIOGRAM_PLOT_X_MAX = 20; // Removed fixed limit
+const VARIOGRAM_PLOT_Y_MAX = 1; // Keep fixed Y axis (scaled)
+
+// --- Helper: Color Mapping (same as before) ---
+const colorScale = chroma.scale(['blue', 'yellow', 'red']).mode('lab');
+function mapValueToColor(value, minVal, maxVal) {
+    if (minVal === maxVal) return colorScale(0.5).hex();
+    const normalized = (value - minVal) / (maxVal - minVal);
+    return colorScale(normalized).hex();
+}
+
+// --- Data Generation (2D) (same as before) ---
+function generate2DData(numPoints, noiseLevel) {
     const data = [];
-    let currentValue = 0;
+    const trendStrength = 100 * (1 - noiseLevel);
+    const noiseStrength = 150 * noiseLevel;
     for (let i = 0; i < numPoints; i++) {
-        const structuredChange = (Math.random() - 0.5) * (1 - noiseLevel) * 10;
-        const randomNoise = (Math.random() - 0.5) * noiseLevel * 20;
-        currentValue += structuredChange + randomNoise;
-        data.push({ x: i, z: currentValue });
+        const x = Math.random() * SPATIAL_EXTENT_X;
+        const y = Math.random() * SPATIAL_EXTENT_Y;
+        const trendValue = (x / SPATIAL_EXTENT_X + y / SPATIAL_EXTENT_Y) * trendStrength / 2;
+        const noiseValue = (Math.random() - 0.5) * noiseStrength;
+        const z = trendValue + noiseValue;
+        data.push({ x, y, z });
     }
     return data;
 }
 
-// Function to calculate the empirical semivariogram with scaling
-function calculateVariogram(data, numLagBins, maxLagDistance) {
+// --- Variogram Calculation (2D with Dynamic Lag) ---
+function calculateVariogram2D(data, numLagBins) { // Removed maxLagDistance parameter
     const n = data.length;
-    if (n < 2) return { lags: [], variances: [], pointData: [] };
+    if (n < 2) return { scaledData: [], maxDistance: 0 }; // Return object even if empty
 
-    // Calculate pairwise distances and squared differences, respecting the limit
     const pairs = [];
+    let maxActualDistance = 0; // Track the maximum distance found
+
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
-            const dx = Math.abs(data[i].x - data[j].x);
-            if (dx <= maxLagDistance) {
-                const dzSq = (data[i].z - data[j].z) ** 2;
-                pairs.push({ distance: dx, diffSq: dzSq });
+            const dx = data[i].x - data[j].x;
+            const dy = data[i].y - data[j].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Process all pairs with distance > 0
+            if (distance > 0) {
+                const diffSq = (data[i].z - data[j].z) ** 2;
+                pairs.push({ distance, diffSq });
+                // Update max distance found
+                if (distance > maxActualDistance) {
+                    maxActualDistance = distance;
+                }
             }
         }
     }
 
-    if (pairs.length === 0) {
-        console.warn("No pairs found within the specified max lag distance.");
-        return { lags: [], variances: [], pointData: [] };
+    if (pairs.length === 0 || maxActualDistance === 0) {
+        console.warn("No pairs with distance > 0 found.");
+        return { scaledData: [], maxDistance: 0 };
     }
 
-    const binSize = maxLagDistance / numLagBins;
-    if (binSize <= 0) {
+    // Calculate binSize based on the actual max distance found
+    const binSize = maxActualDistance / numLagBins;
+    if (binSize <= 0) { // Should only happen if maxActualDistance is 0, already handled
         console.error("Bin size is zero or negative.");
-        return { lags: [], variances: [], pointData: [] };
+        return { scaledData: [], maxDistance: maxActualDistance };
     }
 
-    const binSums = new Array(numLagBins).fill(0);
-    const binCounts = new Array(numLagBins).fill(0);
-
+    // Store all squared differences per bin (same as before)
+    const binDiffsSq = Array.from({ length: numLagBins }, () => []);
     pairs.forEach(pair => {
-        let binIndex = Math.floor(pair.distance / binSize);
-        if (binIndex >= numLagBins) binIndex = numLagBins - 1;
-        if (binIndex < 0) binIndex = 0;
-        binSums[binIndex] += pair.diffSq;
-        binCounts[binIndex] += 1;
+        // Ensure binIndex does not exceed max index, even with floating point inaccuracies
+        let binIndex = Math.min(numLagBins - 1, Math.floor(pair.distance / binSize));
+         if (binIndex < 0) binIndex = 0; // Safety check
+        binDiffsSq[binIndex].push(pair.diffSq);
     });
 
-    // Calculate raw semivariance and store intermediate data
-    const intermediateData = [];
-    let maxVariance = 0; // Find the max raw semivariance for scaling
+    // Calculate stats for each bin (same logic as before)
+    const variogramDataRaw = [];
+    let maxUpperBoundRaw = 0;
     for (let k = 0; k < numLagBins; k++) {
-        const avgDistance = (k + 0.5) * binSize;
-        if (binCounts[k] > 0) {
-            const semivariance = (binSums[k] / binCounts[k]) * 0.5;
-            intermediateData.push({ x: avgDistance, y_raw: semivariance }); // Store raw value temporarily
-            if (semivariance > maxVariance) {
-                maxVariance = semivariance;
+        const currentBinDiffs = binDiffsSq[k];
+        const count = currentBinDiffs.length;
+        if (count > 0) {
+            const avgDistance = (k + 0.5) * binSize; // Center of the bin
+            const sumDiffSq = currentBinDiffs.reduce((a, b) => a + b, 0);
+            const meanDiffSq = sumDiffSq / count;
+            const semivariance = 0.5 * meanDiffSq;
+
+            let lowerBound = semivariance;
+            let upperBound = semivariance;
+            if (count > 1) {
+                const varianceOfDiffSq = currentBinDiffs.reduce((sum, val) => sum + (val - meanDiffSq) ** 2, 0) / (count - 1);
+                const stdDevOfDiffSq = Math.sqrt(varianceOfDiffSq);
+                const semivarianceStdDev = 0.5 * stdDevOfDiffSq;
+                lowerBound = Math.max(0, semivariance - semivarianceStdDev);
+                upperBound = semivariance + semivarianceStdDev;
             }
+            variogramDataRaw.push({ x: avgDistance, y_raw: semivariance, yMin_raw: lowerBound, yMax_raw: upperBound });
+            if (upperBound > maxUpperBoundRaw) maxUpperBoundRaw = upperBound;
         }
     }
 
-    // *** Scale the semivariance values to [0, 1] ***
-    const pointData = intermediateData.map(point => ({
-        x: point.x,
-        // Scale y value. Handle division by zero if maxVariance is 0.
-        y: (maxVariance > 0) ? point.y_raw / maxVariance : 0
+    // Scale the results (same as before)
+    const variogramDataScaled = variogramDataRaw.map(p => ({
+        x: p.x,
+        y: maxUpperBoundRaw > 0 ? p.y_raw / maxUpperBoundRaw : 0,
+        yMin: maxUpperBoundRaw > 0 ? p.yMin_raw / maxUpperBoundRaw : 0,
+        yMax: maxUpperBoundRaw > 0 ? p.yMax_raw / maxUpperBoundRaw : 0,
     }));
 
-    // Extract lags and scaled variances (optional, pointData is primary now)
-    const lags = pointData.map(p => p.x.toFixed(2));
-    const variances = pointData.map(p => p.y);
-
-    // Return scaled data
-    return { lags, variances, pointData };
+    // Return both scaled data and the max distance used for binning
+    return { scaledData: variogramDataScaled, maxDistance: maxActualDistance };
 }
 
-// Function to plot the scaled variogram
-function plotVariogram(pointData) { // No longer needs maxLagDistance for axis limits
-    if (variogramChartInstance) {
-        variogramChartInstance.destroy();
-    }
-    const ctx = variogramCanvas.getContext('2d');
 
-    variogramChartInstance = new Chart(ctx, {
+// --- Plotting Functions ---
+
+function plot2DData(dataPoints) { // (same as before)
+    if (dataChartInstance) {
+        dataChartInstance.destroy();
+    }
+    if (!dataPoints || dataPoints.length === 0) return;
+    const ctx = dataCanvas.getContext('2d');
+    const values = dataPoints.map(p => p.z);
+    const minZ = Math.min(...values);
+    const maxZ = Math.max(...values);
+    dataChartInstance = new Chart(ctx, {
         type: 'scatter',
-        data: {
-            datasets: [{
-                label: 'Scaled Semivariance (γ(h) / max(γ))', // Update label
-                data: pointData,
-                backgroundColor: 'rgb(0, 123, 255)', // Changed color slightly
-                pointRadius: 5,
-            }]
-        },
+        data: { datasets: [{
+            label: 'Data Points',
+            data: dataPoints.map(p => ({ x: p.x, y: p.y })),
+            pointRadius: 5,
+            pointBackgroundColor: dataPoints.map(p => mapValueToColor(p.z, minZ, maxZ)),
+        }] },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false, aspectRatio: 1,
             scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    title: {
-                        display: true,
-                        text: 'Lag Distance (h)'
-                    },
-                    min: 0,
-                    max: 100 // Keep the fixed X limit
-                },
-                y: {
-                    title: {
-                        display: true,
-                        // *** Update Y-axis title ***
-                        text: 'Scaled Semivariance'
-                    },
-                    min: 0,
-                    // *** Set Y-axis max to 1 ***
-                    max: 1
-                }
+                x: { title: { display: true, text: 'X Coordinate' }, min: 0, max: SPATIAL_EXTENT_X, grid: { color: '#eee' } },
+                y: { title: { display: true, text: 'Y Coordinate' }, min: 0, max: SPATIAL_EXTENT_Y, grid: { color: '#eee' } }
             },
             plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        title: function() { return ''; },
-                        label: function(context) {
-                             // Tooltip shows the scaled value
-                            let label = context.dataset.label || '';
-                             if (label) {
-                                label = 'Scaled γ: '; // Simpler label
-                            }
-                            if (context.parsed.y !== null) {
-                                label += `${context.parsed.y.toFixed(3)} (at lag ${context.parsed.x.toFixed(2)})`;
-                            }
-                             return label;
-                        }
-                    }
-                }
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(context) {
+                    const index = context.dataIndex; const point = dataPoints[index];
+                    return `(X: ${point.x.toFixed(1)}, Y: ${point.y.toFixed(1)}), Value: ${point.z.toFixed(2)}`;
+                }}}
             }
         }
     });
 }
 
-// Event listener for the generate button (no changes needed here, but update output text)
-generateBtn.addEventListener('click', () => {
+// Updated plotting function for semivariogram
+function plotSemivariogram(variogramResults) {
+    if (semivariogramChartInstance) {
+        semivariogramChartInstance.destroy();
+    }
+
+    const variogramData = variogramResults.scaledData;
+    const plotMaxX = variogramResults.maxDistance;
+
+    if (!variogramData || variogramData.length === 0) return;
+
+    const ctx = semivariogramCanvas.getContext('2d');
+
+    const centerPoints = variogramData.map(p => ({ x: p.x, y: p.y }));
+    const lowerBoundPoints = variogramData.map(p => ({ x: p.x, y: p.yMin }));
+    const upperBoundPoints = variogramData.map(p => ({ x: p.x, y: p.yMax }));
+
+    semivariogramChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: { /* ... (datasets remain the same) ... */
+           datasets: [
+                {
+                    label: 'Lower Bound (Approx)', data: lowerBoundPoints, pointRadius: 3,
+                    backgroundColor: 'rgba(255, 99, 132, 0.4)', showLine: false,
+                },
+                {
+                    label: 'Upper Bound (Approx)', data: upperBoundPoints, pointRadius: 3,
+                    backgroundColor: 'rgba(255, 99, 132, 0.4)', showLine: false,
+                },
+                {
+                    label: 'Semivariance (Scaled)', data: centerPoints, pointRadius: 5,
+                    backgroundColor: 'rgb(255, 99, 132)', showLine: false,
+                    // Optional: Increase hit radius slightly if intersect:false isn't enough
+                    // pointHitRadius: 10
+                },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            // *** Add Interaction Settings ***
+            interaction: {
+                mode: 'nearest', // Find the single nearest item
+                axis: 'xy',      // Check both x and y proximity
+                intersect: false // IMPORTANT: Trigger tooltip even if mouse isn't directly over the point's pixels
+            },
+            scales: { /* ... (scales remain the same) ... */
+                x: {
+                    type: 'linear', position: 'bottom',
+                    title: { display: true, text: 'Lag Distance (h)' },
+                    min: 0,
+                    max: plotMaxX
+                },
+                y: {
+                    title: { display: true, text: 'Scaled Semivariance' },
+                    min: 0,
+                    max: VARIOGRAM_PLOT_Y_MAX,
+                    grid: { color: '#eee' }
+                }
+            },
+            plugins: { /* ... (plugins remain the same) ... */
+                 legend: { display: false },
+                 tooltip: {
+                     // Tooltip inherits interaction mode unless overridden here
+                     filter: function(tooltipItem) { return tooltipItem.datasetIndex === 2; },
+                     callbacks: { label: function(context) {
+                         const point = variogramData[context.dataIndex];
+                         return `Lag: ${point.x.toFixed(2)}, Scaled γ: ${point.y.toFixed(3)} (Bounds: ${point.yMin.toFixed(3)}-${point.yMax.toFixed(3)})`;
+                     }}
+                 }
+            }
+        }
+    });
+}
+
+
+// --- Event Listener & Initial Load ---
+function runSimulation() {
+    // Get inputs
     const numPoints = parseInt(numPointsInput.value);
     const noiseLevel = parseFloat(noiseLevelInput.value);
     const numLagBins = parseInt(lagBinsInput.value);
-    const maxLagDistance = parseFloat(maxLagDistanceInput.value);
+    // const maxLagDistance = parseFloat(maxLagDistanceInput.value); // Removed
 
-    // Validation (same as before)
-    if (isNaN(numPoints) || numPoints < 20 || numPoints > 500) {
-        outputDiv.textContent = 'Please enter a valid number of points (20-500).'; return;
+    // Validation
+    if (isNaN(numPoints) || isNaN(noiseLevel) || isNaN(numLagBins) ||
+        numPoints < 10 || numPoints > 100 ||
+        noiseLevel < 0 || noiseLevel > 1 ||
+        numLagBins < 3 || numLagBins > 15)
+    {
+        outputDiv.textContent = 'Please check input values (ensure they are within specified ranges).';
+        // Clear plots if input is invalid
+        if (dataChartInstance) dataChartInstance.destroy();
+        if (semivariogramChartInstance) semivariogramChartInstance.destroy();
+        return;
     }
-    if (isNaN(noiseLevel) || noiseLevel < 0 || noiseLevel > 1) {
-         outputDiv.textContent = 'Please enter a valid noise level (0-1).'; return;
-    }
-    if (isNaN(numLagBins) || numLagBins < 5 || numLagBins > 30) {
-         outputDiv.textContent = 'Please enter a valid number of lag bins (5-30).'; return;
-    }
-    if (isNaN(maxLagDistance) || maxLagDistance <= 0 ) {
-         outputDiv.textContent = 'Please enter a valid positive Max Lag Distance for calculation.'; return;
-    }
 
-    // Generate data
-    const dataPoints = generateData(numPoints, noiseLevel);
+    // Generate Data
+    const dataPoints = generate2DData(numPoints, noiseLevel);
 
-    // Calculate scaled variogram
-    const { lags, variances, pointData } = calculateVariogram(dataPoints, numLagBins, maxLagDistance);
+    // Calculate Variogram (no maxLagDistance passed)
+    const variogramResultsObject = calculateVariogram2D(dataPoints, numLagBins);
 
-    // Plot scaled variogram
-    plotVariogram(pointData); // Pass only pointData
+    // Plot Results (pass the whole object)
+    plot2DData(dataPoints);
+    plotSemivariogram(variogramResultsObject);
 
-    // Display info (update text)
-    const numPairsTotal = dataPoints.length * (dataPoints.length - 1) / 2;
-    const numPointsUsed = pointData.length;
-    outputDiv.textContent = `Generated ${dataPoints.length} points. Calculated ${numPairsTotal} total possible pairs. ` +
-                            `Used pairs within calculation limit of ${maxLagDistance} distance. ` +
-                            `Plotted ${numPointsUsed} variogram points. Y-values scaled to [0, 1]. Chart axes fixed (X max: 20, Y max: 1).`;
-});
+    // Update Output
+    const numVariogramPoints = variogramResultsObject.scaledData.length;
+    const reportedMaxLag = variogramResultsObject.maxDistance.toFixed(1);
+    outputDiv.textContent = `Generated ${dataPoints.length} data points. ` +
+                            `Calculated ${numVariogramPoints} variogram bins with data. ` +
+                            `Max lag distance considered: ${reportedMaxLag}.`;
+}
 
-// Initial plot when the page loads
-generateBtn.click();
+generateBtn.addEventListener('click', runSimulation);
+window.addEventListener('load', runSimulation);

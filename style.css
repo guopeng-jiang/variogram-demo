@@ -8,6 +8,18 @@ body {
 
 h1, h2 {
     color: #0056b3;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+p {
+    text-align: center;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+    color: #555;
 }
 
 .controls {
@@ -18,16 +30,21 @@ h1, h2 {
     margin-bottom: 20px;
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 15px; /* Increased gap */
     align-items: center;
+    justify-content: center; /* Center controls */
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .controls label {
     font-weight: bold;
+    margin-right: -5px; /* Adjust spacing */
 }
 
 .controls input[type="number"] {
-    width: 80px;
+    width: 60px; /* Slightly smaller */
     padding: 5px;
     border: 1px solid #ccc;
     border-radius: 3px;
@@ -47,21 +64,44 @@ h1, h2 {
     background-color: #0056b3;
 }
 
-.chart-container {
+/* New styles for plot layout */
+.plots-wrapper {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    max-width: 1200px; /* Max width for the plots */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.plot-container {
+    flex: 1; /* Allow containers to grow */
+    min-width: 350px; /* Minimum width before wrapping */
+    max-width: 550px; /* Optional max width */
     background-color: #fff;
     padding: 15px;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-    max-width: 800px; /* Limit chart width */
-    margin-left: auto;
-    margin-right: auto;
-    /* *** ADD A FIXED HEIGHT *** */
-    height: 400px; /* Adjust this value as needed */
-    /* You might also add position relative if needed later, */
-    /* but usually just height is enough */
-    /* position: relative; */
+    /* Set a fixed height to prevent resize jumping */
+    height: 450px; /* Adjust as needed */
+    display: flex; /* Use flexbox for centering canvas */
+    flex-direction: column; /* Stack title and canvas */
+    align-items: center; /* Center horizontally */
 }
+
+.plot-container h2 {
+    margin-bottom: 15px;
+    font-size: 1.1em;
+}
+
+/* Make canvas fill the container height (minus title/padding) */
+.plot-container canvas {
+    max-width: 100%;
+    max-height: calc(100% - 40px); /* Approximate height available */
+}
+
 
 #output {
     margin-top: 10px;
@@ -69,10 +109,8 @@ h1, h2 {
     background-color: #e9ecef;
     border-radius: 3px;
     font-size: 0.9em;
-}
-
-canvas {
-    /* Let Chart.js handle the canvas sizing within the fixed container */
-    /* No explicit height/width needed here */
-    max-width: 100%; /* Keep this */
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
 }
