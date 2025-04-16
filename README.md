@@ -8,9 +8,7 @@ The application generates random 2D spatial data and calculates its correspondin
 
 You can access the live demo hosted on GitHub Pages here:
 
-**[https://<your-username>.github.io/<repository-name>/](https://<your-username>.github.io/<repository-name>/)**
-
-**(Remember to replace `<your-username>` and `<repository-name>` with your actual GitHub username and the name of this repository!)**
+**[https://<your-username>.github.io/<repository-name>/](https://guopeng-jiang.github.io/variogram-demo/)**
 
 ## Features
 
@@ -60,7 +58,7 @@ You can access the live demo hosted on GitHub Pages here:
 
 1.  Clone this repository:
     ```bash
-    git clone https://github.com/<your-username>/<repository-name>.git
+    git clone https://github.com/guopeng-jiang/variogram-demo.git
     ```
 2.  Navigate to the cloned directory:
     ```bash
@@ -70,4 +68,4 @@ You can access the live demo hosted on GitHub Pages here:
 
 ## License
 
-This project is intended for educational purposes. You are free to use and modify the code. (Consider adding a specific license like MIT if desired).
+This project is intended for educational purposes.
