@@ -8,7 +8,7 @@ The application generates random 2D spatial data and calculates its correspondin
 
 You can access the live demo hosted on GitHub Pages here:
 
-**[https://<your-username>.github.io/<repository-name>/](https://guopeng-jiang.github.io/variogram-demo/)**
+**[https://guopeng-jiang.github.io/variogram-demo/](https://guopeng-jiang.github.io/variogram-demo/)**
 
 ## Features
 
@@ -62,7 +62,7 @@ You can access the live demo hosted on GitHub Pages here:
     ```
 2.  Navigate to the cloned directory:
     ```bash
-    cd <repository-name>
+    cd variogram-demo
     ```
 3.  Open the `index.html` file in your web browser. No web server is required.
 
