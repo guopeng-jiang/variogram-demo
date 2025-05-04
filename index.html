@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Variogram Concept Demo (Dynamic Lag)</title>
+    <title>2D Variogram Concept Interactive Playground</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>2D Variogram Concept Playground</h1>
+    <h1>2D Variogram Concept Interactive Playground</h1>
     <p>
         Visualizes randomly generated 2D spatial data and its corresponding empirical semivariogram.
         <br>
@@ -20,15 +20,16 @@
 
     <div class="controls">
         <label for="numPoints">Number of Points (max 100):</label>
-        <input type="number" id="numPoints" value="80" min="10" max="100" step="5">
+        <!-- *** Update value and min *** -->
+        <input type="number" id="numPoints" value="10" min="2" max="100" step="1"> <!-- Changed min to 2, default value to 10, step to 1 -->
 
         <label for="noiseLevel">Noise Level (0-1):</label>
-        <input type="number" id="noiseLevel" value="0.6" min="0" max="1" step="0.1">
+        <!-- *** Update value *** -->
+        <input type="number" id="noiseLevel" value="0" min="0" max="1" step="0.1"> <!-- Changed value to 0 -->
 
         <label for="lagBins">Lag Bins (max 15):</label>
-        <input type="number" id="lagBins" value="10" min="3" max="15" step="1">
-
-        <!-- Removed Max Lag Distance Input -->
+        <!-- *** Update value *** -->
+        <input type="number" id="lagBins" value="3" min="3" max="15" step="1"> <!-- Changed value to 3 -->
 
         <button id="generateBtn">Generate Data & Plot Variogram</button>
     </div>
